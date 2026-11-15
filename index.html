@@ -1,0 +1,93 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controle Financeiro</title><style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#14213d;--mut:#64748b;--ln:#e2e8f0;--pos:#0f766e;--neg:#b42318;--acc:#14213d;--warn:#b7791f}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1522;--card:#17233a;--ink:#e8edf5;--mut:#9aa8bd;--ln:#27364f;--pos:#4fd1c5;--neg:#f97066;--acc:#6ea8fe;--warn:#f6c453}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;max-width:980px;margin:auto}
+h1{font-size:18px;margin:0}main{max-width:980px;margin:auto;padding:0 12px 40px}
+nav{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--ln);margin-bottom:14px}
+nav button{background:none;border:0;padding:10px 12px;color:var(--mut);font:inherit;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+nav button.on{color:var(--ink);border-color:var(--acc);font-weight:600}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:8px;padding:14px;margin-bottom:12px}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:12px}
+.kp .card{margin:0}.kp b{display:block;font-size:22px;margin-top:2px}.mut{color:var(--mut);font-size:12px}
+.pos{color:var(--pos)}.neg{color:var(--neg)}h2{font-size:15px;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--ln);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:600}.sc{overflow-x:auto}
+.bar{height:8px;background:var(--ln);border-radius:4px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--pos)}
+label{display:block;font-size:12px;color:var(--mut);margin:8px 0 2px}
+input,select,button.go{width:100%;padding:9px;border:1px solid var(--ln);border-radius:6px;background:var(--card);color:var(--ink);font:inherit}
+button.go{background:var(--acc);color:var(--bg);border:0;cursor:pointer;margin-top:12px;font-weight:600}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.row{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
+#msg{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;display:none}
+svg text{fill:var(--mut);font-size:10px}
+</style></head><body>
+<header><h1>Controle Financeiro</h1><button class="go" style="width:auto;margin:0;padding:6px 12px" onclick="load()">Atualizar</button></header>
+<main id="app"></main><div id="msg"></div>
+<script>
+const $=s=>document.querySelector(s),N=v=>+v||0,
+brl=v=>(v<0?'-':'')+'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),
+cl=v=>v<0?'neg':'pos',mon=x=>String(x||'').slice(0,7);
+let S=JSON.parse(localStorage.getItem('cf')||'{}'),D=null,tab='Painel';
+const now=new Date(),mk=(y,m)=>y+'-'+String(m).padStart(2,'0'),cur=mk(now.getFullYear(),now.getMonth()+1);
+const add=(m,n)=>{const[y,o]=m.split('-').map(Number),t=y*12+o-1+n;return mk(Math.floor(t/12),t%12+1)};
+const toast=t=>{const e=$('#msg');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2500)};
+const post=async b=>{const r=await fetch(S.url,{method:'POST',body:JSON.stringify({token:S.token,...b})});const j=await r.json();if(!j.ok)throw j.erro;return j};
+async function load(){if(!S.url)return setup();$('#app').innerHTML='<p class="mut">Carregando…</p>';
+ try{const r=await fetch(S.url+'?token='+encodeURIComponent(S.token)),j=await r.json();if(!j.ok)throw j.erro;D=j.dados;draw()}
+ catch(e){$('#app').innerHTML='<div class="card neg">Não foi possível ler a planilha ('+e+'). Confira URL, token e se a implantação está com acesso "Qualquer pessoa".</div>';setup(true)}}
+function setup(keep){$('#app').insertAdjacentHTML(keep?'beforeend':'afterbegin',`<div class="card"><h2>Conexão</h2><label>URL do App da Web (termina em /exec)</label><input id="u" value="${S.url||''}"><label>Token</label><input id="t" type="password" value="${S.token||''}"><button class="go" onclick="S={url:$('#u').value.trim(),token:$('#t').value.trim()};localStorage.setItem('cf',JSON.stringify(S));load()">Salvar e carregar</button></div>`)}
+function calc(){const c=D.Config,med=N(c['Média do cartão / variáveis (R$/mês)']),sale=c['Incluir venda na projeção? (Sim/Não)']==='Sim',price=N(c['Corolla — preço anunciado (R$)']),
+ sm=mon(c['Mês previsto da venda (AAAA-MM)'])||cur,itau=D['Dívidas'].find(d=>/Itaú/.test(d['Dívida']||'')&&d['Parcelas restantes']),
+ resHoje=D.Bancos.filter(b=>b.Tipo==='Reserva').reduce((a,b)=>a+N(b['Saldo (R$)']),0);let saldo=N(c['Caixa operacional hoje (R$)']),res=resHoje;
+ return[...Array(12)].map((_,i)=>{const m=add(cur,i),o={Fixa:0,Dívida:0,Reserva:0,Variável:0,Meninas:0,Outros:0,Salário:0};let ent=0;
+ const out=(n,v)=>o[o[n]!==undefined?n:'Outros']+=v;
+ D.Recorrentes.forEach(r=>{if(r.Ativo!=='Sim')return;const a=mon(r['Início (AAAA-MM)']),f=mon(r['Fim (AAAA-MM, vazio = sem fim)'])||'9999-99';
+  if(m<a||m>f)return;if(r.Periodicidade==='Anual'&&N(m.slice(5))!==N(r['Mês cobrança (anual)']))return;if(sale&&/Itaú/.test(r.Nome)&&m>=sm)return;
+  const v=N(r['Valor (R$)']);r.Tipo==='Entrada'?ent+=v:out(r.Natureza,v)});
+ D['Lançamentos'].forEach(l=>{if(mon(l['Competência (AAAA-MM)'])!==m)return;const v=N(l['Valor (R$)']);l.Tipo==='Entrada'?ent+=v:out(l.Natureza,v)});
+ const k=D['Cartão'].find(x=>mon(x['Competência (AAAA-MM)'])===m),kv=k?N(k['Valor lançado (R$)']):0;o.Variável+=k&&k.Status==='Fechada'?kv:Math.max(kv,med);
+ D.Meninas.forEach(x=>{if(mon(x['Competência (AAAA-MM)'])===m&&x.Tipo)o.Meninas+=(x.Tipo==='Despesa'?1:-1)*N(x['Valor (R$)'])});
+ if(sale&&m===sm&&itau){ent+=price;o.Dívida+=N(itau['Saldo hoje (R$)'])}
+ const sai=Object.values(o).reduce((a,b)=>a+b,0);saldo+=ent-sai;res+=o.Reserva;return{m,ent,...o,sai,saldo,res}})}
+function chart(R,meta){const W=640,H=200,P=36,all=[...R.map(r=>r.saldo),...R.map(r=>r.res),meta,0],lo=Math.min(...all),hi=Math.max(...all),
+ x=i=>P+i*(W-P-8)/11,y=v=>H-20-(v-lo)/((hi-lo)||1)*(H-40),pl=k=>R.map((r,i)=>x(i)+','+y(r[k])).join(' ');
+ return`<svg viewBox="0 0 ${W} ${H}" width="100%"><line x1="${P}" x2="${W}" y1="${y(meta)}" y2="${y(meta)}" stroke="var(--warn)" stroke-dasharray="4"/><text x="${P+4}" y="${y(meta)-4}">meta da reserva</text>
+ <polyline points="${pl('saldo')}" fill="none" stroke="var(--acc)" stroke-width="2.5"/><polyline points="${pl('res')}" fill="none" stroke="var(--pos)" stroke-width="2"/>
+ ${R.map((r,i)=>`<text x="${x(i)-10}" y="${H-4}">${r.m.slice(5)}/${r.m.slice(2,4)}</text>`).join('')}
+ <text x="2" y="${y(hi)+8}">${Math.round(hi/1000)}k</text><text x="2" y="${y(lo)}">${Math.round(lo/1000)}k</text></svg><div class="mut"><span style="color:var(--acc)">■</span> Caixa &nbsp;<span style="color:var(--pos)">■</span> Reserva acumulada</div>`}
+function draw(){const c=D.Config,R=calc(),mm=N(c['Meta da reserva (meses de despesa)']),base=N(c['Despesa mensal base (R$)']),meta=mm*base,r0=R[0],
+ res=D.Bancos.filter(b=>b.Tipo==='Reserva').reduce((a,b)=>a+N(b['Saldo (R$)']),0),pct=meta?Math.min(100,res/meta*100):0,last=R[11];
+ const T={Painel:()=>`<div class="kp"><div class="card"><span class="mut">Caixa hoje</span><b>${brl(N(c['Caixa operacional hoje (R$)']))}</b></div>
+ <div class="card"><span class="mut">Resultado de ${cur}</span><b class="${cl(r0.ent-r0.sai)}">${brl(r0.ent-r0.sai)}</b></div>
+ <div class="card"><span class="mut">Caixa em ${last.m}</span><b class="${cl(last.saldo)}">${brl(last.saldo)}</b></div>
+ <div class="card"><span class="mut">Reserva (${mm} meses = ${brl(meta)})</span><b>${brl(res)}</b><div class="bar"><i style="width:${pct}%"></i></div><span class="mut">${pct.toFixed(0)}% da meta · projetada em 12 meses: ${brl(last.res)}</span></div></div>
+ <div class="card"><h2>Próximos 12 meses</h2>${chart(R,meta)}</div>
+ <div class="card"><h2>Gastos de ${cur}</h2>${['Fixa','Dívida','Variável','Reserva','Meninas','Outros'].map(k=>`<div class="row"><span>${k}</span><b>${brl(r0[k])}</b></div>`).join('')}
+ <div class="row"><span>Fixos vs. variáveis</span><b>${r0.sai?Math.round((r0.Fixa+r0.Dívida)/r0.sai*100):0}% / ${r0.sai?Math.round(r0.Variável/r0.sai*100):0}%</b></div></div>
+ <div class="card sc"><h2>Projeção mensal</h2><table><tr><th>Mês</th><th>Entradas</th><th>Fixas</th><th>Dívidas</th><th>Variáveis</th><th>Reserva</th><th>Meninas</th><th>Caixa</th></tr>
+ ${R.map(r=>`<tr><td>${r.m}</td><td>${brl(r.ent)}</td><td>${brl(r.Fixa)}</td><td>${brl(r.Dívida)}</td><td>${brl(r.Variável)}</td><td>${brl(r.Reserva)}</td><td>${brl(r.Meninas)}</td><td class="${cl(r.saldo)}">${brl(r.saldo)}</td></tr>`).join('')}</table>
+ <p class="mut">Cenário Corolla: ${c['Incluir venda na projeção? (Sim/Não)']==='Sim'?'ligado':'desligado'} (altere em Config na planilha).</p></div>`,
+ Lançar:()=>`<div class="card"><h2>Novo lançamento</h2><div class="g2"><div><label>Tipo</label><select id="lt"><option>Saída</option><option>Entrada</option></select></div>
+ <div><label>Natureza</label><select id="ln"><option>Variável</option><option>Fixa</option><option>Dívida</option><option>Reserva</option><option>Meninas</option><option>Salário</option><option>Outros</option></select></div></div>
+ <label>Descrição</label><input id="ld"><div class="g2"><div><label>Valor (R$)</label><input id="lv" type="number" step="0.01" inputmode="decimal"></div><div><label>Data</label><input id="ldt" type="date" value="${now.toISOString().slice(0,10)}"></div></div>
+ <label>Categoria</label><input id="lc"><button class="go" onclick="addL()">Lançar</button></div>`,
+ Cartão:()=>{const k=D['Cartão'].find(x=>mon(x['Competência (AAAA-MM)'])===cur);return`<div class="card"><h2>Fatura de ${cur}</h2><label>Valor atual (R$)</label><input id="cv" type="number" step="0.01" value="${k?N(k['Valor lançado (R$)']):''}">
+ <label>Status</label><select id="cs"><option>Em aberto</option><option>Fechada</option></select><button class="go" onclick="upC()">Atualizar fatura</button></div>
+ <div class="card"><h2>Saldos dos bancos</h2>${D.Bancos.map((b,i)=>`<div class="row"><span>${b.Banco} <span class="mut">${b.Tipo}</span></span><input id="b${i}" type="number" step="0.01" style="width:140px" value="${N(b['Saldo (R$)'])}"><button class="go" style="width:auto;margin:0;padding:6px 10px" onclick="upB(${i})">OK</button></div>`).join('')}</div>`},
+ Dívidas:()=>{const it=D['Dívidas'].find(d=>/Itaú/.test(d['Dívida']||'')&&d['Parcelas restantes']),cx=N(c['Caixa operacional hoje (R$)']);return`<div class="card sc"><h2>Dívidas</h2><table><tr><th>Dívida</th><th>Saldo</th><th>Parcela</th><th>Restam</th><th>Último mês</th></tr>
+ ${D['Dívidas'].filter(d=>d['Parcelas restantes']&&d['Dívida']!=='TOTAL').map(d=>`<tr><td>${d['Dívida']}</td><td>${brl(N(d['Saldo hoje (R$)']))}</td><td>${brl(N(d['Parcela (R$)']))}</td><td>${d['Parcelas restantes']}</td><td>${mon(d['Último mês'])}</td></tr>`).join('')}</table></div>
+ ${it?`<div class="card"><h2>Quitar o Itaú com o caixa</h2><div class="row"><span>Quitação</span><b>${brl(N(it['Saldo hoje (R$)']))}</b></div><div class="row"><span>Juros evitados</span><b class="pos">${brl(N(it['Juros futuros (R$)']))}</b></div>
+ <div class="row"><span>Caixa depois</span><b>${brl(cx-N(it['Saldo hoje (R$)']))}</b></div><div class="row"><span>Meses de despesa cobertos</span><b>${base?((cx-N(it['Saldo hoje (R$)']))/base).toFixed(1):0} (meta ${mm})</b></div></div>`:''}`},
+ Meninas:()=>{const M=D.Meninas.filter(x=>x.Tipo),d=M.filter(x=>x.Tipo==='Despesa').reduce((a,x)=>a+N(x['Valor (R$)']),0),p=N(c['% de reembolso das Meninas'])||.5,rb=M.filter(x=>x.Tipo==='Reembolso').reduce((a,x)=>a+N(x['Valor (R$)']),0);
+ return`<div class="kp"><div class="card"><span class="mut">Despesas</span><b>${brl(d)}</b></div><div class="card"><span class="mut">A receber (${p*100}%)</span><b class="pos">${brl(d*p-rb)}</b></div><div class="card"><span class="mut">Custo líquido atual</span><b>${brl(d-rb)}</b></div></div>
+ <div class="card"><h2>Novo item</h2><div class="g2"><div><label>Tipo</label><select id="mt"><option>Despesa</option><option>Reembolso</option></select></div><div><label>Cachorro</label><select id="mc"><option>Ambas</option><option>Zoe</option><option>Eva</option></select></div></div>
+ <label>Item</label><input id="mi"><label>Valor (R$)</label><input id="mv" type="number" step="0.01" inputmode="decimal"><button class="go" onclick="addM()">Lançar</button></div>`}};
+ $('#app').innerHTML='<nav>'+Object.keys(T).map(k=>`<button class="${k===tab?'on':''}" onclick="tab='${k}';draw()">${k}</button>`).join('')+'</nav>'+T[tab]()}
+const run=async(f,ok)=>{try{await f();toast(ok);await load()}catch(e){toast('Erro: '+e)}};
+const addL=()=>run(()=>post({action:'add',aba:'Lançamentos',linha:{'Competência (AAAA-MM)':$('#ldt').value.slice(0,7),'Data':$('#ldt').value,'Tipo':$('#lt').value,'Natureza':$('#ln').value,'Categoria':$('#lc').value,'Descrição':$('#ld').value,'Valor (R$)':N($('#lv').value),'Status':'Realizado'}}),'Lançado');
+const addM=()=>run(()=>post({action:'add',aba:'Meninas',linha:{'Competência (AAAA-MM)':cur,'Data':now.toISOString().slice(0,10),'Item':$('#mi').value,'Cachorro':$('#mc').value,'Tipo':$('#mt').value,'Valor (R$)':N($('#mv').value),'Pago por':$('#mt').value==='Despesa'?'Élton':'Ex-esposa'}}),'Lançado');
+const upC=()=>run(()=>post({action:'upsert',aba:'Cartão',linha:{'Competência (AAAA-MM)':cur,'Valor lançado (R$)':N($('#cv').value),'Status':$('#cs').value}}),'Fatura atualizada');
+const upB=i=>run(()=>post({action:'upsert',aba:'Bancos',linha:{'Banco':D.Bancos[i].Banco,'Saldo (R$)':N($('#b'+i).value),'Atualizado em':now.toISOString().slice(0,10),'Tipo':D.Bancos[i].Tipo}}),'Saldo atualizado');
+load();
+</script></body></html>
